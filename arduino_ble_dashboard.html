@@ -1098,26 +1098,21 @@ async function connectBLE(){
   const deviceName='BLE-'+id;
   S.blePIN=id;
   log(`BLE 탐색 중: ${deviceName} ...`,'sys');
-  log('브라우저 장치 선택 팝업에서 "'+deviceName+'" 을 선택하세요.','sys');
+  log('팝업에서 "'+deviceName+'" 을 선택하세요.','sys');
 
   try{
-    // ★ 핵심 수정: 서비스 UUID 필터 사용
-    // {name} 필터는 일부 환경에서 동작 안 함
-    // 서비스 UUID로 BLE 보드를 먼저 탐색하고,
-    // 팝업에서 사용자가 직접 "BLE-XXXX" 장치 선택
+    // acceptAllDevices: 주변 모든 BLE 장치를 목록에 표시
+    // → 사용자가 "BLE-XXXX" 직접 선택
     const device = await navigator.bluetooth.requestDevice({
-      filters:[
-        { services: [BLE_SERVICE] },          // 서비스 UUID 필터 (신뢰성 높음)
-        { namePrefix: 'BLE-' }                // 이름 접두사 필터 병행
-      ],
+      acceptAllDevices: true,
       optionalServices: [BLE_SERVICE]
     });
 
-    // 선택된 장치 이름 검증
+    // 선택된 장치명 검증
     if(device.name && device.name !== deviceName){
       const ok = confirm(
         `선택된 장치: "${device.name}"\n` +
-        `입력한 ID: "${deviceName}"\n\n` +
+        `입력한 ID:   "${deviceName}"\n\n` +
         `장치가 다릅니다. 계속 연결하시겠습니까?`
       );
       if(!ok){ log('연결 취소됨','sys'); return; }
@@ -1125,16 +1120,13 @@ async function connectBLE(){
 
     S.bleDevice=device;
     device.addEventListener('gattserverdisconnected', onBLEDisconnected);
-
     log('BLE 장치 선택됨: '+(device.name||'(이름 없음)'),'sys');
-    log('GATT 서버 연결 중...','sys');
 
     const server  = await device.gatt.connect();
     S.bleServer   = server;
     const service = await server.getPrimaryService(BLE_SERVICE);
     S.bleService  = service;
 
-    // 각 센서 Characteristic 구독
     S.bleChars={};
     for(const [sid, uuid] of Object.entries(BLE_CHAR_MAP)){
       try{
@@ -1147,7 +1139,7 @@ async function connectBLE(){
             onBLELine(line);
           });
         }
-      }catch(e){ /* 해당 특성 없으면 스킵 */ }
+      }catch(e){}
     }
 
     S.bleConnected=true;
@@ -1158,8 +1150,7 @@ async function connectBLE(){
 
     const info=document.getElementById('ble-device-info');
     info.style.display='';
-    info.innerHTML=`연결됨: <b>${device.name||deviceName}</b><br>
-                    주소: ${device.id.slice(0,16)}...`;
+    info.innerHTML=`연결됨: <b>${device.name||deviceName}</b>`;
 
     document.getElementById('conn-dot').classList.add('on');
     document.getElementById('conn-label').textContent='BLE: '+(device.name||deviceName);
@@ -1168,9 +1159,9 @@ async function connectBLE(){
 
   }catch(e){
     if(e.name==='NotFoundError')
-      log('장치를 찾을 수 없거나 선택이 취소됐습니다.','err');
+      log('장치 선택이 취소됐습니다.','err');
     else if(e.name==='SecurityError')
-      log('보안 오류: HTTPS 또는 localhost 환경이 필요합니다.','err');
+      log('보안 오류: HTTPS 환경이 필요합니다.','err');
     else
       log('BLE 연결 실패: '+e.message,'err');
   }
